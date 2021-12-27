@@ -14,39 +14,20 @@
 #define NUMBER_OF_SERVERS 3
 #define LOCAL_HOST "127.0.0.1"
 
+
 #define handle_error(msg) \
            do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-const char *request_end = "\r\n\r\n";
 
 int ranged_rand(int lower, int upper)
 {
     return (rand() % (upper - lower + 1)) + lower;
 }
 
-char* read_server_message(int server_socket){
-    int counter = 0, i = 0;
-    char *returned_string, *temp_returned;
 
-    recv(server_socket, temp_returned, MAX_LEN_RECV, 0);
-    strcat(returned_string,temp_returned);
-
-    while(counter < 2){
-        if (strcmp(temp_returned + i, "\r\n\r\n") == 0)
-            counter++;
-        if (temp_returned[i] == '\0') {
-            recv(server_socket, temp_returned, MAX_LEN_RECV, 0);
-            strcat(returned_string,temp_returned);
-        }
-        i++;
-    }
-
-    return returned_string;
-}
-
-int  return_number_of_times_request_end_in_request(char* request, int size_of_full_request) {
+int  return_number_of_times_request_end_in_request(char* request, size_t size_of_full_request) {
     int count_request_end=0;
-    int j;
+    size_t j;
     if(size_of_full_request<4){
 
         return 0;
@@ -66,9 +47,9 @@ int main() {
 
     int port_server, port_client, servers_accept_sockets_array[3], accept_client_socket; // the sockets returned from accept
     int addr_len = sizeof(struct sockaddr_in);
-    int size_of_full_request=0;
+    size_t size_of_full_request=0;
 
-    char receive_buffer[MAX_LEN_RECV],*returned_string;
+    char receive_buffer[MAX_LEN_RECV];
     char* full_request= malloc(sizeof(char));
 
 
@@ -144,8 +125,8 @@ int main() {
         }
 
         do {
-            int  bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
-            int old_size_of_full_request=size_of_full_request;
+            size_t  bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
+            size_t old_size_of_full_request=size_of_full_request;
             size_of_full_request+=bytes_recv;
             printf("%s\n",receive_buffer);
             full_request= (char *) realloc(full_request, size_of_full_request);
@@ -158,10 +139,12 @@ int main() {
 
         }while (return_number_of_times_request_end_in_request(full_request, size_of_full_request) == 0);
 
-        send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0); //sends the string to next server by order
-        recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
+        //sends the string to next server by order
+        send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0);
+
+        //recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
         //returned_string = read_server_message(temp);
-        send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
+        //send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
 
         i = (i==3) ? 0 : (i + 1);
 
