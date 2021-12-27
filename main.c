@@ -139,15 +139,17 @@ int main() {
 
         do {
             int bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
-
+            int old_size_of_full_request=size_of_full_request;
+            size_of_full_request+=bytes_recv;
             printf("%s\n",receive_buffer);
             full_request= (char *) realloc(full_request, size_of_full_request);
 
-            char* pointer_to_start_of_current_message=full_request+size_of_full_request;
+            char* pointer_to_start_of_current_message=full_request+old_size_of_full_request;
+
             memcpy((pointer_to_start_of_current_message),receive_buffer, bytes_recv);
 
             printf("%s\n",full_request);
-            size_of_full_request+=bytes_recv;
+
         }while (check_if_request_completed(full_request, size_of_full_request) == 0);
 
         send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
