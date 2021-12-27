@@ -43,13 +43,32 @@ int  return_number_of_times_request_end_in_request(char* request, size_t size_of
     return count_request_end;
 }
 
+void receives_message_to_full_request_until_num_of_request_ends(int number_of_requests_ends, int accept_client_socket
+                                                                ,char** full_request, size_t* size_of_full_request){
+    char receive_buffer[MAX_LEN_RECV];
+
+    do {
+        size_t  bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
+        size_t old_size_of_full_request=*size_of_full_request;
+        *size_of_full_request+=bytes_recv;
+        printf("%s\n",receive_buffer);
+        *full_request= (char *) realloc(*full_request, *size_of_full_request);
+
+        char* pointer_to_start_of_current_message=*full_request+old_size_of_full_request;
+
+        memcpy((pointer_to_start_of_current_message),receive_buffer, bytes_recv);
+
+        printf("%s\n",*full_request);
+
+    }while (return_number_of_times_request_end_in_request(*full_request, *size_of_full_request) != number_of_requests_ends);
+}
+
 int main() {
 
-    int port_server, port_client, servers_accept_sockets_array[3], accept_client_socket; // the sockets returned from accept
+    int port_server, port_client, servers_accept_sockets_array[3], accept_client_socket;
     int addr_len = sizeof(struct sockaddr_in);
     size_t size_of_full_request=0;
 
-    char receive_buffer[MAX_LEN_RECV];
     char* full_request= malloc(sizeof(char));
 
 
@@ -124,20 +143,8 @@ int main() {
             accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
         }
 
-        do {
-            size_t  bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
-            size_t old_size_of_full_request=size_of_full_request;
-            size_of_full_request+=bytes_recv;
-            printf("%s\n",receive_buffer);
-            full_request= (char *) realloc(full_request, size_of_full_request);
-
-            char* pointer_to_start_of_current_message=full_request+old_size_of_full_request;
-
-            memcpy((pointer_to_start_of_current_message),receive_buffer, bytes_recv);
-
-            printf("%s\n",full_request);
-
-        }while (return_number_of_times_request_end_in_request(full_request, size_of_full_request) == 0);
+        receives_message_to_full_request_until_num_of_request_ends(1, accept_client_socket
+        ,&full_request, &size_of_full_request);
 
         //sends the string to next server by order
         send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0);
