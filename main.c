@@ -148,14 +148,17 @@ int main() {
 
         //sends the string to next server by order
         send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0);
+        size_of_full_request=0;
+        free(full_request);
+        full_request= malloc(sizeof(char));
+        receives_message_to_full_request_until_num_of_request_ends(2,servers_accept_sockets_array[i],
+                                                                   &full_request, &size_of_full_request);
 
-        //recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
-        //returned_string = read_server_message(temp);
-        //send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
+        send(accept_client_socket, full_request, size_of_full_request, 0);
 
         i = (i==3) ? 0 : (i + 1);
 
-        break;
+
     }
 
 
