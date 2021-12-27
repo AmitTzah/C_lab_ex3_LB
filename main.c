@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 
 #define MAX_LEN_RECV 1024 // I'm not sure what should we use
@@ -11,6 +12,7 @@
 #define MAX_PORT_VAL 64000
 #define LISTEN_BACKLOG 10
 #define NUMBER_OF_SERVERS 3
+#define LOCAL_HOST "127.0.0.1"
 
 #define handle_error(msg) \
            do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -53,7 +55,7 @@ int check_if_request_completed(char* request) {
 }
 
 int main() {
-    int temp;
+
     int port_server, port_client, servers_accept_sockets_array[3], client_connected; // the sockets returned from accept
     int addr_len = sizeof(struct sockaddr_in);
     char buff[MAX_LEN_RECV], *full_request, *returned_string;
@@ -70,16 +72,17 @@ int main() {
 
 
     //create sockaddr variable with random porn number
+    srand ( time(NULL) );
     port_server = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
     port_client = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
 
     struct sockaddr_in service_client, service_server;
     service_client.sin_family = AF_INET;
-    service_client.sin_addr.s_addr = inet_addr( "127.0.0.1" );
+    service_client.sin_addr.s_addr = inet_addr( LOCAL_HOST );
     service_client.sin_port = htons(port_client);
 
     service_server.sin_family = AF_INET;
-    service_server.sin_addr.s_addr = inet_addr( "127.0.0.1" );
+    service_server.sin_addr.s_addr = inet_addr( LOCAL_HOST );
     service_server.sin_port = htons(port_server);
 
     //bind sever socket, keep trying until success
@@ -119,7 +122,7 @@ int main() {
 
     // Accepting http connection
     client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
-    while(client_connected <= 0) { // failed to accept, try again
+    while(client_connected < 0) { // failed to accept, try again
         listen(sock_client, LISTEN_BACKLOG);
         client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
     }
@@ -130,7 +133,9 @@ int main() {
         do {
             recv(client_connected, buff, MAX_LEN_RECV, 0); // recives string from http untill \r\n\r\n
             full_request = strcat(full_request, buff);
+            printf("%s\n",buff);
         }while (check_if_request_completed(full_request) == 0);
+        printf("%s\n",full_request);
 
         send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
         recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
