@@ -7,7 +7,7 @@
 #include <time.h>
 
 
-#define MAX_LEN_RECV 1024 // I'm not sure what should we use
+#define MAX_LEN_RECV 1000 // I'm not sure what should we use
 #define MIN_PORT_VAL 1024
 #define MAX_PORT_VAL 64000
 #define LISTEN_BACKLOG 10
@@ -44,21 +44,28 @@ char* read_server_message(int server_socket){
     return returned_string;
 }
 
-int check_if_request_completed(char* request) {
-    int i = 0;
-    while(!((request[i] == '\r') && (request[i+1] =='\n') && (request[i+2] == '\r') && (request[i+3] =='\n'))) {
-        i++;
-        if (i == strlen(request)-1)
-            return 0;
-    }
+int  check_if_request_completed(char* request, int size_of_full_request) {
+    int i=size_of_full_request;
+
+    if((request[i-4] == '\r') && (request[i-3] =='\n') && (request[i-2] == '\r') && (request[i-1] =='\n')) {
     return 1;
+
+
+    }
+
+    return 0;
 }
 
 int main() {
 
     int port_server, port_client, servers_accept_sockets_array[3], accept_client_socket; // the sockets returned from accept
     int addr_len = sizeof(struct sockaddr_in);
-    char buff[MAX_LEN_RECV], *full_request, *returned_string;
+    int size_of_full_request=0;
+
+    char receive_buffer[MAX_LEN_RECV],*returned_string;
+    char* full_request= malloc(sizeof(char));
+
+
     FILE *server_port_number, *client_port_number;
     server_port_number = fopen("server_port.txt", "w");
     client_port_number = fopen("http_port.txt", "w");
@@ -120,30 +127,37 @@ int main() {
         }
     }
 
-    // Accepting http connection
-    accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
-    while(accept_client_socket < 0) { // failed to accept, try again
-        listen(main_client_socket, LISTEN_BACKLOG);
-        accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
-    }
 
     i = 0;
     while (1){
+        // Accepting http connection
+        accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
+        while(accept_client_socket < 0) { // failed to accept, try again
+            listen(main_client_socket, LISTEN_BACKLOG);
+            accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
+        }
 
         do {
-            recv(accept_client_socket, buff, MAX_LEN_RECV, 0); // recives string from http untill \r\n\r\n
-            full_request = strcat(full_request, buff);
-            printf("%s\n",buff);
-        }while (check_if_request_completed(full_request) == 0);
-        printf("%s\n",full_request);
+            int bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
+
+            printf("%s\n",receive_buffer);
+            full_request= (char *) realloc(full_request, size_of_full_request);
+
+            char* pointer_to_start_of_current_message=full_request+size_of_full_request;
+            memcpy((pointer_to_start_of_current_message),receive_buffer, bytes_recv);
+
+            printf("%s\n",full_request);
+            size_of_full_request+=bytes_recv;
+        }while (check_if_request_completed(full_request, size_of_full_request) == 0);
 
         send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
         recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
         //returned_string = read_server_message(temp);
         send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
-        i = (i==3) ? 0 : i + 1;
+
+        i = (i==3) ? 0 : (i + 1);
+
         break;
-        /* not sure if break is needed */
     }
 
 
