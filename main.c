@@ -56,7 +56,7 @@ int check_if_request_completed(char* request) {
 
 int main() {
 
-    int port_server, port_client, servers_accept_sockets_array[3], client_connected; // the sockets returned from accept
+    int port_server, port_client, servers_accept_sockets_array[3], accept_client_socket; // the sockets returned from accept
     int addr_len = sizeof(struct sockaddr_in);
     char buff[MAX_LEN_RECV], *full_request, *returned_string;
     FILE *server_port_number, *client_port_number;
@@ -64,10 +64,10 @@ int main() {
     client_port_number = fopen("http_port.txt", "w");
 
     //create a new socket for servers and for client
-    int sock_client = socket(AF_INET, SOCK_STREAM, 0);
-    int LB_main_socket = socket(AF_INET, SOCK_STREAM, 0);
+    int main_client_socket = socket(AF_INET, SOCK_STREAM, 0);
+    int main_server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (sock_client == -1 || LB_main_socket==-1){
+    if (main_client_socket == -1 || main_server_socket == -1){
         handle_error("socket");}
 
 
@@ -86,33 +86,33 @@ int main() {
     service_server.sin_port = htons(port_server);
 
     //bind sever socket, keep trying until success
-    while (bind(LB_main_socket, (struct sockaddr*)&service_server, sizeof(service_server)) == -1) {
+    while (bind(main_server_socket, (struct sockaddr*)&service_server, sizeof(service_server)) == -1) {
         port_server = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
         service_server.sin_port = htons(port_server);
     }
     fprintf(server_port_number, "%d", port_server);
     fclose(server_port_number);
-    if (listen(LB_main_socket, LISTEN_BACKLOG) == -1)
+    if (listen(main_server_socket, LISTEN_BACKLOG) == -1)
         handle_error("listen");
 
 
     //bind client socket, keep trying until success
-    while (bind(sock_client, (struct sockaddr*)&service_client, sizeof(service_client)) == -1) {
+    while (bind(main_client_socket, (struct sockaddr*)&service_client, sizeof(service_client)) == -1) {
         port_client = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
         service_client.sin_port = htons(port_client);
     }
     fprintf(client_port_number, "%d", port_client);
     fclose(client_port_number);
-    if (listen(sock_client, LISTEN_BACKLOG) == -1)
+    if (listen(main_client_socket, LISTEN_BACKLOG) == -1)
         handle_error("listen");
 
     // Waiting till 3 servers are connected
     int i = 0;
     while (i<NUMBER_OF_SERVERS){
-        servers_accept_sockets_array[i] = accept(LB_main_socket, (struct sockaddr*)&service_server, &addr_len);
+        servers_accept_sockets_array[i] = accept(main_server_socket, (struct sockaddr*)&service_server, &addr_len);
         if(servers_accept_sockets_array[i] != -1 ) {
             i++;
-            listen(LB_main_socket, LISTEN_BACKLOG);
+            listen(main_server_socket, LISTEN_BACKLOG);
         }
         else{
             handle_error("accept");
@@ -121,17 +121,17 @@ int main() {
     }
 
     // Accepting http connection
-    client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
-    while(client_connected < 0) { // failed to accept, try again
-        listen(sock_client, LISTEN_BACKLOG);
-        client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
+    accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
+    while(accept_client_socket < 0) { // failed to accept, try again
+        listen(main_client_socket, LISTEN_BACKLOG);
+        accept_client_socket = accept(main_client_socket, (struct sockaddr *) &service_client, &addr_len);
     }
 
     i = 0;
     while (1){
 
         do {
-            recv(client_connected, buff, MAX_LEN_RECV, 0); // recives string from http untill \r\n\r\n
+            recv(accept_client_socket, buff, MAX_LEN_RECV, 0); // recives string from http untill \r\n\r\n
             full_request = strcat(full_request, buff);
             printf("%s\n",buff);
         }while (check_if_request_completed(full_request) == 0);
@@ -140,7 +140,7 @@ int main() {
         send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
         recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
         //returned_string = read_server_message(temp);
-        send(client_connected, returned_string, MAX_LEN_RECV, 0);
+        send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
         i = (i==3) ? 0 : i + 1;
         break;
         /* not sure if break is needed */
