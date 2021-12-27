@@ -73,8 +73,8 @@ int main() {
 
 
     FILE *server_port_number, *client_port_number;
-    server_port_number = fopen("server_port.txt", "w");
-    client_port_number = fopen("http_port.txt", "w");
+    server_port_number = fopen("server_port", "w");
+    client_port_number = fopen("http_port", "w");
 
     //create a new socket for servers and for client
     int main_client_socket = socket(AF_INET, SOCK_STREAM, 0);
