@@ -44,16 +44,22 @@ char* read_server_message(int server_socket){
     return returned_string;
 }
 
-int  check_if_request_completed(char* request, int size_of_full_request) {
-    int i=size_of_full_request;
+int  return_number_of_times_request_end_in_request(char* request, int size_of_full_request) {
+    int count_request_end=0;
+    int j;
+    if(size_of_full_request<4){
 
-    if((request[i-4] == '\r') && (request[i-3] =='\n') && (request[i-2] == '\r') && (request[i-1] =='\n')) {
-    return 1;
-
-
+        return 0;
     }
 
-    return 0;
+    for(j=4; j<(size_of_full_request+1);j++) {
+        if ((request[j - 4] == '\r') && (request[j - 3] == '\n') && (request[j - 2] == '\r') &&
+            (request[j - 1] == '\n')) {
+            count_request_end++;
+
+        }
+    }
+    return count_request_end;
 }
 
 int main() {
@@ -138,7 +144,7 @@ int main() {
         }
 
         do {
-            int bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
+            int  bytes_recv= recv(accept_client_socket, receive_buffer, MAX_LEN_RECV, 0);
             int old_size_of_full_request=size_of_full_request;
             size_of_full_request+=bytes_recv;
             printf("%s\n",receive_buffer);
@@ -150,9 +156,9 @@ int main() {
 
             printf("%s\n",full_request);
 
-        }while (check_if_request_completed(full_request, size_of_full_request) == 0);
+        }while (return_number_of_times_request_end_in_request(full_request, size_of_full_request) == 0);
 
-        send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
+        send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0); //sends the string to next server by order
         recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
         //returned_string = read_server_message(temp);
         send(accept_client_socket, returned_string, MAX_LEN_RECV, 0);
