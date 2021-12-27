@@ -9,7 +9,11 @@
 #define MAX_LEN_RECV 1024 // I'm not sure what should we use
 #define MIN_PORT_VAL 1024
 #define MAX_PORT_VAL 64000
-#define BACKLOG 10
+#define LISTEN_BACKLOG 10
+#define NUMBER_OF_SERVERS 3
+
+#define handle_error(msg) \
+           do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 const char *request_end = "\r\n\r\n";
 
@@ -50,7 +54,7 @@ int check_if_request_completed(char* request) {
 
 int main() {
     int temp;
-    int port_server, port_client, servers_array[3], client_connected; // the sockets returned from accept
+    int port_server, port_client, servers_accept_sockets_array[3], client_connected; // the sockets returned from accept
     int addr_len = sizeof(struct sockaddr_in);
     char buff[MAX_LEN_RECV], *full_request, *returned_string;
     FILE *server_port_number, *client_port_number;
@@ -59,7 +63,11 @@ int main() {
 
     //create a new socket for servers and for client
     int sock_client = socket(AF_INET, SOCK_STREAM, 0);
-    int sock_server = socket(AF_INET, SOCK_STREAM, 0);
+    int LB_main_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (sock_client == -1 || LB_main_socket==-1){
+        handle_error("socket");}
+
 
     //create sockaddr variable with random porn number
     port_server = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
@@ -75,14 +83,14 @@ int main() {
     service_server.sin_port = htons(port_server);
 
     //bind sever socket, keep trying until success
-    while (bind(sock_server, (struct sockaddr*)&service_server, sizeof(service_server)) == -1) {
+    while (bind(LB_main_socket, (struct sockaddr*)&service_server, sizeof(service_server)) == -1) {
         port_server = ranged_rand(MIN_PORT_VAL, MAX_PORT_VAL);
         service_server.sin_port = htons(port_server);
     }
     fprintf(server_port_number, "%d", port_server);
     fclose(server_port_number);
-    if (listen(sock_server, BACKLOG) == -1)
-        exit(1);
+    if (listen(LB_main_socket, LISTEN_BACKLOG) == -1)
+        handle_error("listen");
 
 
     //bind client socket, keep trying until success
@@ -92,27 +100,27 @@ int main() {
     }
     fprintf(client_port_number, "%d", port_client);
     fclose(client_port_number);
-    if (listen(sock_client, BACKLOG) == -1)
-        exit(1);
+    if (listen(sock_client, LISTEN_BACKLOG) == -1)
+        handle_error("listen");
 
     // Waiting till 3 servers are connected
     int i = 0;
-    while (i<3){
-        servers_array[i] = accept(sock_server, (struct sockaddr*)&service_server, &addr_len);
-        if(servers_array[i] > 0 ) {
+    while (i<NUMBER_OF_SERVERS){
+        servers_accept_sockets_array[i] = accept(LB_main_socket, (struct sockaddr*)&service_server, &addr_len);
+        if(servers_accept_sockets_array[i] != -1 ) {
             i++;
-            listen(sock_server, BACKLOG);
+            listen(LB_main_socket, LISTEN_BACKLOG);
         }
         else{
-            printf("connection failed, exit");
-            exit(1);
+            handle_error("accept");
+
         }
     }
 
     // Accepting http connection
     client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
     while(client_connected <= 0) { // failed to accept, try again
-        listen(sock_client, BACKLOG);
+        listen(sock_client, LISTEN_BACKLOG);
         client_connected = accept(sock_client, (struct sockaddr *) &service_client, &addr_len);
     }
 
@@ -124,8 +132,8 @@ int main() {
             full_request = strcat(full_request, buff);
         }while (check_if_request_completed(full_request) == 0);
 
-        send(servers_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
-        recv(servers_array[i], returned_string, MAX_LEN_RECV, 0);
+        send(servers_accept_sockets_array[i], full_request, MAX_LEN_RECV, 0); //sends the string to next server by order
+        recv(servers_accept_sockets_array[i], returned_string, MAX_LEN_RECV, 0);
         //returned_string = read_server_message(temp);
         send(client_connected, returned_string, MAX_LEN_RECV, 0);
         i = (i==3) ? 0 : i + 1;
