@@ -1,9 +1,7 @@
 #include <arpa/inet.h>
-#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
 
 #define MAX_LEN_RECV 1000
@@ -45,11 +43,11 @@ struct sockaddr_in set_sockaddr_parameters(const int *port)
     return service;
 }
 
-void connect_all_servers(int **servers_array, int *main_server_socket, struct sockaddr_in service, int addr_len){
+void connect_all_servers(int *servers_array, const int *main_server_socket, struct sockaddr_in service, int *addr_len){
     int i = 0;
     while (i < NUMBER_OF_SERVERS) {  // Waiting till all servers are connected
-        *servers_array[i] = accept(*main_server_socket, (struct sockaddr *)&service, &addr_len);
-        if (*servers_array[i] != -1) {
+        servers_array[i] = accept(*main_server_socket, (struct sockaddr *)&service, addr_len);
+        if (servers_array[i] != -1) {
             i++;
             listen(*main_server_socket, LISTEN_BACKLOG);
         } else {
@@ -71,7 +69,6 @@ int return_number_of_times_request_end_in_request(char *request, size_t size_of_
     return count_request_end;
 }
 
-
 void receives_message_to_full_request_until_num_of_request_ends(int number_of_requests_ends, int accept_client_socket,
                                                                 char **full_request, size_t *size_of_full_request)
 {
@@ -85,6 +82,31 @@ void receives_message_to_full_request_until_num_of_request_ends(int number_of_re
         memcpy((pointer_to_start_of_current_message), receive_buffer, bytes_recv);
     } while (return_number_of_times_request_end_in_request(*full_request, *size_of_full_request) !=
              number_of_requests_ends);
+}
+
+void LB_loop(int *accept_client_socket, const int *main_client_socket, struct sockaddr_in service_client, int *addr_len,
+                size_t *size_of_full_request, int *servers_accept_sockets_array,  char **full_request){
+    int i = 0;
+    while (1) {
+        *accept_client_socket = accept(*main_client_socket, (struct sockaddr *)&service_client, addr_len);
+        while (*accept_client_socket < 0) {  // failed to accept, try again
+            listen(*main_client_socket, LISTEN_BACKLOG);
+            *accept_client_socket = accept(*main_client_socket, (struct sockaddr *)&service_client, addr_len);
+        }
+        receives_message_to_full_request_until_num_of_request_ends(1, *accept_client_socket, full_request,
+                                                                   size_of_full_request);
+
+        send(servers_accept_sockets_array[i], *full_request, *size_of_full_request, 0);  // sends request to current server
+        *size_of_full_request = 0;
+        free(*full_request);
+        *full_request = malloc(sizeof(char));
+        receives_message_to_full_request_until_num_of_request_ends(2, servers_accept_sockets_array[i], full_request,
+                                                                   size_of_full_request);
+
+        send(*accept_client_socket, *full_request, *size_of_full_request, 0);
+        *size_of_full_request = 0;
+        i = (i == NUMBER_OF_SERVERS - 1) ? 0 : (i + 1);
+    }
 }
 
 int main()
@@ -113,35 +135,8 @@ int main()
     bind_and_print_port(&main_server_socket, service_server, &port_server, server_port_number);
     bind_and_print_port(&main_client_socket, service_server, &port_client, client_port_number);
 
-    int i = 0;
-    while (i < NUMBER_OF_SERVERS) {  // Waiting till all servers are connected
-        servers_accept_sockets_array[i] = accept(main_server_socket, (struct sockaddr *)&service_server, &addr_len);
-        if (servers_accept_sockets_array[i] != -1) {
-            i++;
-            listen(main_server_socket, LISTEN_BACKLOG);
-        } else {
-            handle_error("accept");
-        }
-    }
-    i = 0;
-    while (1) {
-        accept_client_socket = accept(main_client_socket, (struct sockaddr *)&service_client, &addr_len);
-        while (accept_client_socket < 0) {  // failed to accept, try again
-            listen(main_client_socket, LISTEN_BACKLOG);
-            accept_client_socket = accept(main_client_socket, (struct sockaddr *)&service_client, &addr_len);
-        }
-        receives_message_to_full_request_until_num_of_request_ends(1, accept_client_socket, &full_request,
-                                                                   &size_of_full_request);
+    connect_all_servers(servers_accept_sockets_array, &main_server_socket, service_server, &addr_len);
 
-        send(servers_accept_sockets_array[i], full_request, size_of_full_request, 0);  // sends request to current server
-        size_of_full_request = 0;
-        free(full_request);
-        full_request = malloc(sizeof(char));
-        receives_message_to_full_request_until_num_of_request_ends(2, servers_accept_sockets_array[i], &full_request,
-                                                                   &size_of_full_request);
-
-        send(accept_client_socket, full_request, size_of_full_request, 0);
-        size_of_full_request = 0;
-        i = (i == NUMBER_OF_SERVERS - 1) ? 0 : (i + 1);
-    }
+    LB_loop(&accept_client_socket, &main_client_socket, service_client, &addr_len, &size_of_full_request,
+            servers_accept_sockets_array,  &full_request);
 }
